@@ -1,22 +1,49 @@
-#!/usr/bin/env python3
-"""Entry for make.fun news-image-20261126.
+"""Copy the news-image entry to the sandbox output directory.
 
-Copies the poster (entry.png, shipped in this repository) to the
-output location. Standard library only: no network, no randomness,
-so every run writes byte-identical output.
+Reads entry.png sitting next to this script and writes it to
+/output/entry.png, creating /output when it does not exist.
+Standard library only; no network access.
+
+The output must be a PNG of at most 1 MiB (1048576 bytes), matching the
+competition gate. The copy is byte-for-byte, so repeated runs produce
+identical output.
 """
-import os
+
 import shutil
+import sys
+from pathlib import Path
+
+MAX_BYTES = 1_048_576
+OUTPUT_DIR = Path("/output")
+OUTPUT_FILE = OUTPUT_DIR / "entry.png"
 
 
-def main():
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
-    os.makedirs(out_dir, exist_ok=True)
-    here = os.path.dirname(os.path.abspath(__file__))
-    dest = os.path.join(out_dir, "entry.png")
-    shutil.copyfile(os.path.join(here, "entry.png"), dest)
-    print("wrote", dest)
+def main() -> int:
+    source = Path(__file__).resolve().parent / "entry.png"
+    data = source.read_bytes()
+
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        print("error: entry.png is not a PNG file", file=sys.stderr)
+        return 1
+
+    if len(data) > MAX_BYTES:
+        print(
+            f"error: entry.png is {len(data)} bytes, over the 1 MiB limit",
+            file=sys.stderr,
+        )
+        return 1
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, OUTPUT_FILE)
+
+    written = OUTPUT_FILE.read_bytes()
+    if written != data:
+        print("error: output bytes differ from entry.png", file=sys.stderr)
+        return 1
+
+    print(f"wrote {OUTPUT_FILE} ({len(written)} bytes)")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
